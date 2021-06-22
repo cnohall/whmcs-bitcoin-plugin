@@ -12,6 +12,13 @@ class Blockonomics
 {
     private $version = '1.9.0';
 
+    const BASE_URL = 'https://www.blockonomics.co';
+    const BCH_BASE_URL = 'https://bch.blockonomics.co';
+
+    const NEW_ADDRESS_PATH = '/api/new_address';
+    const PRICE_PATH = '/api/price?currency=';
+    const GET_CALLBACKS_PATH = '/api/address?&no_balance=true&only_xpub=true&get_callback=true';
+    const SET_CALLBACK_PATH = '/api/update_callback';
     /*
      * Get the blockonomics version
      */
@@ -178,24 +185,15 @@ class Blockonomics
      */
     public function getNewAddress($currency = 'btc', $reset = false)
     {
-        if ($currency == 'btc') {
-            $subdomain = 'www';
-        } else {
-            $subdomain = $currency;
-        }
-
         $api_key = $this->getApiKey();
         $callback_secret = $this->getCallbackSecret();
 
-        if ($reset) {
-            $get_params = "?match_callback=$callback_secret&reset=1";
-        } else {
-            $get_params = "?match_callback=$callback_secret";
-        }
+        $url = ($crypto == 'btc') ? Blockonomics::BASE_URL . Blockonomics::NEW_ADDRESS_PATH  : Blockonomics::BCH_BASE_URL . Blockonomics::NEW_ADDRESS_PATH;
+        $url = ($reset) ? $url . "?match_callback=$callback_secret&reset=1" : $url . "?match_callback=$callback_secret";
 
         $ch = curl_init();
 
-        curl_setopt($ch, CURLOPT_URL, 'https://' . $subdomain . '.blockonomics.co/api/new_address' . $get_params);
+        curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
 
@@ -646,13 +644,20 @@ class Blockonomics
      */
     public function testSetup($new_api)
     {
+        $test_results = array();
+        $active_cryptos = $this->getActiveCurrencies();
+        foreach ($active_cryptos as $code => $crypto) {
+            $test_results[$code] = $this->testOneCrypto($code);
+        }
+        return $test_results;
+    }
+    public function testOneCrypto($crypto)
+    {
         include_once $this->getLangFilePath();
-
-        $xpub_fetch_url = 'https://www.blockonomics.co/api/address?&no_balance=true&only_xpub=true&get_callback=true';
-        $set_callback_url = 'https://www.blockonomics.co/api/update_callback';
+        $domain = ($crypto == 'btc') ? Blockonomics::BASE_URL : Blockonomics::BCH_BASE_URL;
         $error_str = '';
 
-        $response = $this->doCurlCall($xpub_fetch_url);
+        $response = $this->doCurlCall($domain . BLOCKONOMICS::GET_CALLBACKS_PATH);
 
         $secret = $this->getCallbackSecret();
         $callback_url = $this->getCallbackUrl($secret);
@@ -671,7 +676,7 @@ class Blockonomics
             if (!$response->data[0]->callback || $response->data[0]->callback == null) {
                 //No callback URL set, set one
                 $post_content = '{"callback": "' . $callback_url . '", "xpub": "' . $response->data[0]->address . '"}';
-                $this->doCurlCall($set_callback_url, $post_content);
+                $this->doCurlCall($domain . BLOCKONOMICS::SET_CALLBACK_PATH, $post_content);
             } elseif ($response->data[0]->callback != $callback_url) {
                 // Check if only secret differs
                 $base_url = substr($callback_url, 0, -48);
@@ -679,14 +684,14 @@ class Blockonomics
                     //Looks like the user regenrated callback by mistake
                     //Just force Update_callback on server
                     $post_content = '{"callback": "' . $callback_url . '", "xpub": "' . $response->data[0]->address . '"}';
-                    $this->doCurlCall($set_callback_url, $post_content);
+                    $this->doCurlCall($domain . BLOCKONOMICS::SET_CALLBACK_PATH, $post_content);
                 } else {
                     $error_str = $_BLOCKLANG['testSetup']['existingCallbackUrl'];
                 }
             }
         } else {
             $error_str = $_BLOCKLANG['testSetup']['multipleXpubs'];
-
+        
             foreach ($response->data as $resObj) {
                 if ($resObj->callback == $callback_url) {
                     // Matching callback URL found, set error back to empty
@@ -694,15 +699,19 @@ class Blockonomics
                 }
             }
         }
-
+        
         if ($error_str == '') {
             // Test new address generation
-            $new_addresss_response = $this->getNewAddress('btc', true);
+            $new_addresss_response = $this->getNewAddress($crypto, true);
             if ($new_addresss_response->status != 200) {
                 $error_str = $new_addresss_response->message;
             }
         }
-
+        
         return $error_str;
     }
 }
+
+
+
+

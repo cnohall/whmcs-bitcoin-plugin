@@ -159,6 +159,7 @@ function blockonomics_config()
 				var responseObj = {};
 				try {
 					responseObj = JSON.parse(this.responseText);
+                    console.log(responseObj);
 				} catch (err) {
 					var testSetupUrl = "$system_url" + "modules/gateways/blockonomics/testsetup.php";
 					responseObj.error = true;
@@ -195,7 +196,7 @@ function blockonomics_config()
 
                 const activeCryptos = JSON.parse('$active_currencies');
                 for (const crypto in activeCryptos) {
-                    rowFromBottom = (crypto === 'btc') ? 2 : 1
+                    rowFromBottom = (crypto === 'btc') ? 2 : 1;
                     testSetupResultCell = addTestResultRow (rowFromBottom);
 
                     var apiKeyField = document.getElementsByName('field[ApiKey]')[0];
@@ -215,7 +216,7 @@ function blockonomics_config()
                     oReq.addEventListener("load", reqListener);
                     oReq.open("GET", testSetupUrl);
                     oReq.send();
-
+                    
                     newBtn.disabled = true;
                     testSetupResultCell.innerHTML = "$trans_text_testing";
                 }
