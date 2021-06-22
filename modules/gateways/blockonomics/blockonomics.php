@@ -644,6 +644,10 @@ class Blockonomics
      */
     public function testSetup($new_api)
     {
+        $api_key = $this->getApiKey();
+        if ($api_key != $new_api) {
+            $error_str = $_BLOCKLANG['testSetup']['newApi']; //API key changed
+        }
         $test_results = array();
         $active_cryptos = $this->getActiveCurrencies();
         foreach ($active_cryptos as $code => $crypto) {
@@ -654,61 +658,93 @@ class Blockonomics
     public function testOneCrypto($crypto)
     {
         include_once $this->getLangFilePath();
-        $domain = ($crypto == 'btc') ? Blockonomics::BASE_URL : Blockonomics::BCH_BASE_URL;
         $error_str = '';
-
+        $domain = ($crypto == 'btc') ? Blockonomics::BASE_URL : Blockonomics::BCH_BASE_URL;
         $response = $this->doCurlCall($domain . BLOCKONOMICS::GET_CALLBACKS_PATH);
+        $error_str = $this->checkCallbackUrlsOrSetOne($crypto, $response);
+        if (!$error_str) {
+            //Everything OK ! Test address generation
+            $response = $this->getNewAddress($crypto, true);
+            if ($response->response_code != 200) {
+                $error_str = $new_addresss_response->message;
+            }
+        }
+        return $error_str;
+    }
 
-        $secret = $this->getCallbackSecret();
-        $callback_url = $this->getCallbackUrl($secret);
-        $api_key = $this->getApiKey();
-        if ($api_key != $new_api) {
-            $error_str = $_BLOCKLANG['testSetup']['newApi']; //API key changed
-        } elseif (!isset($response->response_code)) {
+    public function checkCallbackUrlsOrSetOne($crypto, $response)
+    {
+        //check the current callback and detect any potential errors
+        $error_str = $this->checkGetCallbacksResponseCode($response);
+        if (!$error_str) {
+            //check callback responsebody and if needed, set the callback.
+            $error_str = $this->checkGetCallbacksResponseBody($response, $crypto);
+        }
+        return $error_str;
+    }
+
+    public function checkGetCallbacksResponseCode($response)
+    {
+        $error_str = '';
+        //TODO: Check This: WE should actually check code for timeout
+        if (!isset($response->response_code)) {
             $error_str = $_BLOCKLANG['testSetup']['blockedHttps'];
         } elseif ($response->response_code == 401) {
             $error_str = $_BLOCKLANG['testSetup']['incorrectApi'];
         } elseif ($response->response_code != 200) {
             $error_str = $response->data;
-        } elseif (!isset($response->data) || count($response->data) == 0) {
-            $error_str = $_BLOCKLANG['testSetup']['noXpub'];
-        } elseif (count($response->data) == 1) {
-            if (!$response->data[0]->callback || $response->data[0]->callback == null) {
-                //No callback URL set, set one
-                $post_content = '{"callback": "' . $callback_url . '", "xpub": "' . $response->data[0]->address . '"}';
-                $this->doCurlCall($domain . BLOCKONOMICS::SET_CALLBACK_PATH, $post_content);
-            } elseif ($response->data[0]->callback != $callback_url) {
-                // Check if only secret differs
-                $base_url = substr($callback_url, 0, -48);
-                if (strpos($response->data[0]->callback, $base_url) !== false) {
-                    //Looks like the user regenrated callback by mistake
-                    //Just force Update_callback on server
-                    $post_content = '{"callback": "' . $callback_url . '", "xpub": "' . $response->data[0]->address . '"}';
-                    $this->doCurlCall($domain . BLOCKONOMICS::SET_CALLBACK_PATH, $post_content);
-                } else {
-                    $error_str = $_BLOCKLANG['testSetup']['existingCallbackUrl'];
-                }
-            }
-        } else {
-            $error_str = $_BLOCKLANG['testSetup']['multipleXpubs'];
-        
-            foreach ($response->data as $resObj) {
-                if ($resObj->callback == $callback_url) {
-                    // Matching callback URL found, set error back to empty
-                    $error_str = '';
-                }
-            }
         }
-        
-        if ($error_str == '') {
-            // Test new address generation
-            $new_addresss_response = $this->getNewAddress($crypto, true);
-            if ($new_addresss_response->status != 200) {
-                $error_str = $new_addresss_response->message;
-            }
-        }
-        
         return $error_str;
+    }
+
+    public function checkGetCallbacksResponseBody($response, $crypto)
+    {
+        $error_str = '';
+        if (!isset($response->data) || count($response->data) == 0) {
+            $error_str = $_BLOCKLANG['testSetup']['multipleXpubs'];
+        } elseif (count($response->data) >= 1) {
+            $error_str = $this->examineServerCallbackUrls($response->data, $crypto);
+        }
+        return $error_str;
+    }
+
+    // checks each existing xpub callback URL to update and/or use
+    public function examineServerCallbackUrls($response_body, $crypto)
+    {
+        $whmcs_callback_url = $this->getCallbackUrl($this->getCallbackSecret());
+        $base_url = preg_replace('/https?:\/\//', '', $whmcs_callback_url);
+        $available_xpub = '';
+        $partial_match = '';
+        //Go through all xpubs on the server and examine their callback url
+        foreach ($response_body as $one_response) {
+            $server_callback_url = isset($one_response->callback) ? $one_response->callback : '';
+            $server_base_url = preg_replace('/https?:\/\//', '', $server_callback_url);
+            $xpub = isset($one_response->address) ? $one_response->address : '';
+            if (!$server_callback_url) {
+                // No callback
+                $available_xpub = $xpub;
+            } elseif ($server_callback_url == $whmcs_callback_url) {
+                // Exact match
+                return '';
+            } elseif (strpos($server_base_url, $base_url) === 0) {
+                // Partial Match - Only secret or protocol differ
+                $partial_match = $xpub;
+            }
+        }
+        // Use the available xpub
+        if ($partial_match || $available_xpub) {
+            $update_xpub = $partial_match ? $partial_match : $available_xpub;
+            $this->updateCallback($whmcs_callback_url, $crypto, $update_xpub);
+            return '';
+        }
+        // No match and no empty callback
+        $error_str = $_BLOCKLANG['testSetup']['multipleXpubs'];
+        return $error_str;
+    }
+    public function updateCallback($callback_url, $crypto, $xpub) 
+    {
+        $post_content = "{'callback': '" . $callback_url . "', 'xpub': '" . $xpub . "'}";
+        $this->doCurlCall($domain . BLOCKONOMICS::SET_CALLBACK_PATH, $post_content);
     }
 }
 
