@@ -644,6 +644,8 @@ class Blockonomics
      */
     public function testSetup($new_api)
     {
+        include_once $this->getLangFilePath();
+
         $api_key = $this->getApiKey();
         if ($api_key != $new_api) {
             $error_str = $_BLOCKLANG['testSetup']['newApi']; //API key changed
@@ -657,7 +659,6 @@ class Blockonomics
     }
     public function testOneCrypto($crypto)
     {
-        include_once $this->getLangFilePath();
         $error_str = '';
         $domain = ($crypto == 'btc') ? Blockonomics::BASE_URL : Blockonomics::BCH_BASE_URL;
         $response = $this->doCurlCall($domain . BLOCKONOMICS::GET_CALLBACKS_PATH);
@@ -685,6 +686,7 @@ class Blockonomics
 
     public function checkGetCallbacksResponseCode($response)
     {
+        include $this->getLangFilePath();
         $error_str = '';
         //TODO: Check This: WE should actually check code for timeout
         if (!isset($response->response_code)) {
@@ -699,6 +701,8 @@ class Blockonomics
 
     public function checkGetCallbacksResponseBody($response, $crypto)
     {
+        include $this->getLangFilePath();
+
         $error_str = '';
         if (!isset($response->data) || count($response->data) == 0) {
             $error_str = $_BLOCKLANG['testSetup']['multipleXpubs'];
@@ -711,6 +715,8 @@ class Blockonomics
     // checks each existing xpub callback URL to update and/or use
     public function examineServerCallbackUrls($response_body, $crypto)
     {
+        include $this->getLangFilePath();
+
         $whmcs_callback_url = $this->getCallbackUrl($this->getCallbackSecret());
         $base_url = preg_replace('/https?:\/\//', '', $whmcs_callback_url);
         $available_xpub = '';

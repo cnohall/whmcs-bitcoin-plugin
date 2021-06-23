@@ -37,6 +37,8 @@ function blockonomics_config()
 
             return <<<HTML
 		<script type="text/javascript">
+            const activeCryptos = JSON.parse('$active_currencies');; //this is needed for testSetup row;
+            var rowFromBottom;
 			var secret = document.getElementsByName('field[CallbackSecret]');
 			secret.forEach(function(element) {
 				element.value = '$secret';
@@ -156,22 +158,29 @@ function blockonomics_config()
             saveButtonCell.appendChild(newBtn);
 
             function reqListener () {
-				var responseObj = {};
-				try {
-					responseObj = JSON.parse(this.responseText);
-                    console.log(responseObj);
-				} catch (err) {
-					var testSetupUrl = "$system_url" + "modules/gateways/blockonomics/testsetup.php";
-					responseObj.error = true;
-					responseObj.errorStr = '$trans_text_system_url_error ' + testSetupUrl + '. $trans_text_system_url_fix';
-				}
-				if (responseObj.error) {
-					testSetupResultCell.innerHTML = "<label style='color:red;'>Error:</label> " + responseObj.errorStr +
-					"<br>For more information, please consult <a href='https://blockonomics.freshdesk.com/support/solutions/articles/33000215104-troubleshooting-unable-to-generate-new-address' target='_blank'>this troubleshooting article</a>";
-				} else {
-					testSetupResultCell.innerHTML = "<label style='color:green;'>$trans_text_success</label>";
-				}
-				newBtn.disabled = false;
+                if (newBtn.disabled) {
+                    newBtn.disabled = false;
+                    var responseObj = {};
+                    try {
+                        responseObj = JSON.parse(this.responseText);
+                    } catch (err) {
+                        var testSetupUrl = "$system_url" + "modules/gateways/blockonomics/testsetup.php";
+                        responseObj.error = true;
+                        responseObj.errorStr = '$trans_text_system_url_error ' + testSetupUrl + '. $trans_text_system_url_fix';
+                    }
+                    
+                    for (const crypto in activeCryptos) {
+                        let row = rowFromBottom ? rowFromBottom : (crypto === 'btc' ? 4 : 2); 
+                        testSetupResultCell = blockonomicsTable.rows[blockonomicsTable.rows.length - row].cells[1];
+                        if(responseObj.errorStr[crypto]) {
+                            testSetupResultCell.innerHTML = "<label style='color:red;'>Error:</label> " + responseObj.errorStr[crypto] +
+                            "<br>For more information, please consult <a href='https://blockonomics.freshdesk.com/support/solutions/articles/33000215104-troubleshooting-unable-to-generate-new-address' target='_blank'>this troubleshooting article</a>";
+                        }
+                        else {
+                            testSetupResultCell.innerHTML = "<label style='color:green;'>$trans_text_success</label>";
+                        }
+                    }
+                }
 			}
 
 			newBtn.onclick = function() {
@@ -180,46 +189,45 @@ function blockonomics_config()
                 blockonomicsForm.submit();
             }
 
-            const addTestResultRow = (rowsFromBottom) => {
+            const addTestResultRow = (rowsFromBottom, message) => {
                 const testSetupResultRow = blockonomicsTable.insertRow(blockonomicsTable.rows.length - rowsFromBottom);
                 const testSetupResultLabel = testSetupResultRow.insertCell(0);
                 const testSetupResultCell = testSetupResultRow.insertCell(1);
                 testSetupResultRow.style.display = "none";
                 testSetupResultRow.style.display = "table-row";
                 testSetupResultCell.className = "fieldarea";
-                return testSetupResultCell;
+                testSetupResultCell.innerHTML = message;
             }
 
             if(sessionStorage.getItem("runTest")) {
-
                 sessionStorage.removeItem("runTest");
+                newBtn.disabled = true;
 
-                const activeCryptos = JSON.parse('$active_currencies');
-                for (const crypto in activeCryptos) {
-                    rowFromBottom = (crypto === 'btc') ? 2 : 1;
-                    testSetupResultCell = addTestResultRow (rowFromBottom);
-
-                    var apiKeyField = document.getElementsByName('field[ApiKey]')[0];
-                    var testSetupUrl = "$system_url" + "modules/gateways/blockonomics/testsetup.php"+"?new_api="+apiKeyField.value;
-
-                    try {
-                        var systemUrlProtocol = new URL("$system_url").protocol;
-                    } catch (err) {
-                        var systemUrlProtocol = '';
-                    }
-
-                    if (systemUrlProtocol != location.protocol) {
-                        testSetupResultCell.innerHTML = "<label style='color:red;'>$trans_text_protocol_error</label> \
-                                $trans_text_protocol_fix";
-                    }
-                    var oReq = new XMLHttpRequest();
-                    oReq.addEventListener("load", reqListener);
-                    oReq.open("GET", testSetupUrl);
-                    oReq.send();
-                    
-                    newBtn.disabled = true;
-                    testSetupResultCell.innerHTML = "$trans_text_testing";
+                try {
+                    var systemUrlProtocol = new URL("$system_url").protocol;
+                } catch (err) {
+                    var systemUrlProtocol = '';
                 }
+                
+                const error = "<label style='color:red;'>$trans_text_protocol_error</label>\$trans_text_protocol_fix";
+                const message = (systemUrlProtocol != location.protocol) ? error : "$trans_text_testing"
+
+                if (Object.keys(activeCryptos).length === 1) {
+                    rowFromBottom = activeCryptos['btc'] ? 2 : 1;
+                    testSetupResultCell = addTestResultRow(rowFromBottom, message);
+                    rowFromBottom++;
+                } else if (Object.keys(activeCryptos).length === 2){
+                    addTestResultRow(2, message); //BTC
+                    addTestResultRow(1, message); //BCH
+                }
+
+                var apiKeyField = document.getElementsByName('field[ApiKey]')[0];
+                var testSetupUrl = "$system_url" + "modules/gateways/blockonomics/testsetup.php"+"?new_api="+apiKeyField.value;
+
+                var oReq = new XMLHttpRequest();
+                oReq.addEventListener("load", reqListener);
+                oReq.open("GET", testSetupUrl);
+                oReq.send();
 			}
 
 		</script>
