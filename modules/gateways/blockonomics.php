@@ -38,7 +38,7 @@ function blockonomics_config()
             return <<<HTML
 		<script type="text/javascript">
             const activeCryptos = JSON.parse('$active_currencies');; //this is needed for testSetup row;
-            var testResultRow; //define a variable in this scope 
+            var testResultRow; //this variable is needed in this scope 
 			var secret = document.getElementsByName('field[CallbackSecret]');
 			secret.forEach(function(element) {
 				element.value = '$secret';
@@ -157,32 +157,6 @@ function blockonomics_config()
 
             saveButtonCell.appendChild(newBtn);
 
-            function reqListener () {
-                if (newBtn.disabled) {
-                    newBtn.disabled = false;
-                    var responseObj = {};
-                    try {
-                        responseObj = JSON.parse(this.responseText);
-                    } catch (err) {
-                        var testSetupUrl = "$system_url" + "modules/gateways/blockonomics/testsetup.php";
-                        responseObj.error = true;
-                        responseObj.errorStr = '$trans_text_system_url_error ' + testSetupUrl + '. $trans_text_system_url_fix';
-                    }
-                    
-                    for (const crypto in activeCryptos) {
-                        let row = testResultRow ? testResultRow : (crypto === 'btc' ? 4 : 2); 
-                        testSetupResultCell = blockonomicsTable.rows[blockonomicsTable.rows.length - row].cells[1];
-                        if(responseObj.errorStr[crypto]) {
-                            testSetupResultCell.innerHTML = "<label style='color:red;'>Error:</label> " + responseObj.errorStr[crypto] +
-                            "<br>For more information, please consult <a href='https://blockonomics.freshdesk.com/support/solutions/articles/33000215104-troubleshooting-unable-to-generate-new-address' target='_blank'>this troubleshooting article</a>";
-                        }
-                        else {
-                            testSetupResultCell.innerHTML = "<label style='color:green;'>$trans_text_success</label>";
-                        }
-                    }
-                }
-			}
-
 			newBtn.onclick = function() {
                 sessionStorage.setItem("runTest", true);
                 const blockonomicsForm = blockonomicsTable.parentElement;
@@ -228,6 +202,36 @@ function blockonomics_config()
                 oReq.addEventListener("load", reqListener);
                 oReq.open("GET", testSetupUrl);
                 oReq.send();
+			}
+
+            /**
+			 * reqListener fetches the result from testSetup
+			 */
+            function reqListener () {
+                if (newBtn.disabled) {
+                    newBtn.disabled = false;
+                    var responseObj = {};
+                    try {
+                        responseObj = JSON.parse(this.responseText);
+                    } catch (err) {
+                        var testSetupUrl = "$system_url" + "modules/gateways/blockonomics/testsetup.php";
+                        responseObj.error = true;
+                        responseObj.errorStr = '$trans_text_system_url_error ' + testSetupUrl + '. $trans_text_system_url_fix';
+                    }
+                    
+                    for (const crypto in activeCryptos) {
+
+                        let row = testResultRow ? testResultRow : (crypto === 'btc' ? 4 : 2); 
+                        testSetupResultCell = blockonomicsTable.rows[blockonomicsTable.rows.length - row].cells[1];
+                        if(responseObj.errorStr[crypto]) {
+                            testSetupResultCell.innerHTML = "<label style='color:red;'>Error:</label> " + responseObj.errorStr[crypto] +
+                            "<br>For more information, please consult <a href='https://blockonomics.freshdesk.com/support/solutions/articles/33000215104-troubleshooting-unable-to-generate-new-address' target='_blank'>this troubleshooting article</a>";
+                        }
+                        else {
+                            testSetupResultCell.innerHTML = "<label style='color:green;'>$trans_text_success</label>";
+                        }
+                    }
+                }
 			}
 
 		</script>
