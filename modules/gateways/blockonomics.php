@@ -38,7 +38,7 @@ function blockonomics_config()
             return <<<HTML
 		<script type="text/javascript">
             const activeCryptos = JSON.parse('$active_currencies');; //this is needed for testSetup row;
-            var rowFromBottom;
+            var testResultRow; //define a variable in this scope 
 			var secret = document.getElementsByName('field[CallbackSecret]');
 			secret.forEach(function(element) {
 				element.value = '$secret';
@@ -170,7 +170,7 @@ function blockonomics_config()
                     }
                     
                     for (const crypto in activeCryptos) {
-                        let row = rowFromBottom ? rowFromBottom : (crypto === 'btc' ? 4 : 2); 
+                        let row = testResultRow ? testResultRow : (crypto === 'btc' ? 4 : 2); 
                         testSetupResultCell = blockonomicsTable.rows[blockonomicsTable.rows.length - row].cells[1];
                         if(responseObj.errorStr[crypto]) {
                             testSetupResultCell.innerHTML = "<label style='color:red;'>Error:</label> " + responseObj.errorStr[crypto] +
@@ -213,9 +213,9 @@ function blockonomics_config()
                 const message = (systemUrlProtocol != location.protocol) ? error : "$trans_text_testing"
 
                 if (Object.keys(activeCryptos).length === 1) {
-                    rowFromBottom = activeCryptos['btc'] ? 2 : 1;
-                    testSetupResultCell = addTestResultRow(rowFromBottom, message);
-                    rowFromBottom++;
+                    testResultRow = activeCryptos['btc'] ? 2 : 1;
+                    testSetupResultCell = addTestResultRow(testResultRow, message);
+                    testResultRow++;
                 } else if (Object.keys(activeCryptos).length === 2){
                     addTestResultRow(2, message); //BTC
                     addTestResultRow(1, message); //BCH
